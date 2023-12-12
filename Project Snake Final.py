@@ -19,6 +19,7 @@ circle_duration = 3
 game_paused = False
 #snake respawn
 snake = [[window_width // 2, window_height // 2]]
+game_over = False
 
 #food random respawn 
 max_x = (window_width - 2 * boundary_offset - snake_size) // snake_size
@@ -59,6 +60,7 @@ def draw_line(x0, y0, x1, y1):
             err += dx
             y0 += sy
     glEnd()
+    
 def magic_circle():
     global radius, magic_circles
 
@@ -78,17 +80,57 @@ def remove_magic_circles(value):
     current_time = time.time()
     magic_circles = [(x, y, creation_time) for x, y, creation_time in magic_circles if current_time - creation_time < circle_duration]
     glutPostRedisplay()
+
 def draw_magic_circles():
     current_time = time.time()
     global magic_circles, circle_duration
-
     # Filter out expired magic circles
     magic_circles = [(x, y, creation_time) for x, y, creation_time in magic_circles if current_time - creation_time < circle_duration]
-
     glColor3f(0.0, 0.0, 1.0)  # Blue color for magic circles
     for circle in magic_circles:
         x, y, _ = circle
         draw_circle(x, y, snake_size // 2)
+
+
+def check_collision_with_self():
+    global snake, magic_circles
+
+    head = snake[0]
+    for segment in snake[1:]:
+        # Check if the head collides with any other segment of the snake's body
+        if head[0] == segment[0] and head[1] == segment[1]:
+            return True  # Collision detected with itself
+
+    return False  # No collision with itself
+
+
+
+def restart_game():
+    global snake, food, direction, score, magic_circles, game_paused
+    snake = [[window_width // 2, window_height // 2]]
+    respawn_food()
+    direction = [snake_speed, 0]
+    score = 0
+    magic_circles = []
+    game_paused = False
+
+
+# checking collision with the obstacles
+def check_collision_with_obstacles():
+    global snake, obstacles
+
+    head = snake[0]
+    head_x, head_y = head[0], head[1]
+    
+    for obstacle in obstacles:
+        obs_x, obs_y = obstacle['pos']
+        obs_width, obs_height = obstacle['size']
+
+        if (head_x < obs_x + obs_width and head_x + snake_size > obs_x and
+            head_y < obs_y + obs_height and head_y + snake_size > obs_y):
+            return True  # Collision detected with an obstacle
+    return False  # No collision with any obstacle
+
 def close_button():
     draw_line(850,700,900,740)
     draw_line(850,740,900,700)
@@ -102,14 +144,22 @@ def magic_button():
 def pause_button():
     draw_line(800,700,800,740)
     draw_line(820,700,820,740)
-    
+def reset_button():
+    draw_line(750,720,780,720)
+    draw_line(780,720,770,740)
+    draw_line(780,720,770,700)
+def play_button():
+    draw_line(800, 700, 800, 740)
+    draw_line(800, 740, 850, 720)
+    draw_line(850, 720, 800, 700)
+
 def convert_coordinate(x, y):
-    global window_width,window_height
+    global window_width,window_height, game_over
     a = x
     b = window_height- y
     return a, b
 def mouse_click(button, state, x, y):
-    global point_frozen, animation_enabled, game_paused
+    global point_frozen, animation_enabled, game_over, game_paused
 
     if button == GLUT_LEFT_BUTTON and state == GLUT_DOWN:
         x, y = convert_coordinate(x, y)
@@ -125,7 +175,9 @@ def mouse_click(button, state, x, y):
             glutPostRedisplay()
         elif 90 < x < 160 and 690 < y < 740:
             magic_circle()
-
+        elif 750 < x < 780 and 700 < y < 740:
+            restart_game()
+            game_over = False
 
 def draw_circle(cx, cy, r):
     """ Draw a circle using the Midpoint Circle Algorithm """
@@ -162,63 +214,112 @@ def draw_obstacles():
         draw_rect(*obstacle['pos'], *obstacle['size'])
 
 def display():
+    global game_over
+
     glClear(GL_COLOR_BUFFER_BIT)
     glLoadIdentity()
 
-    # Draw boundary lines with an offset inside the window
-    glColor3f(1.0, 1.0, 1.0)
-    draw_line(boundary_offset, boundary_offset, window_width - boundary_offset, boundary_offset)
-    draw_line(boundary_offset, window_height - boundary_offset, window_width - boundary_offset, window_height - boundary_offset)
-    draw_line(boundary_offset, boundary_offset, boundary_offset, window_height - boundary_offset)
-    draw_line(window_width - boundary_offset, boundary_offset, window_width - boundary_offset, window_height - boundary_offset)
+    if game_over:
+        show_game_over()
+        close_button()
+        reset_button()
 
-    # Draw snake
-    glColor3f(0.0, 1.0, 0.0)
-    for segment in snake:
-        draw_rect(segment[0], segment[1], snake_size, snake_size)
+    else:
+        # Draw boundary lines with an offset inside the window
+        glColor3f(1.0, 1.0, 1.0)
+        draw_line(boundary_offset, boundary_offset, window_width - boundary_offset, boundary_offset)
+        draw_line(boundary_offset, window_height - boundary_offset, window_width - boundary_offset, window_height - boundary_offset)
+        draw_line(boundary_offset, boundary_offset, boundary_offset, window_height - boundary_offset)
+        draw_line(window_width - boundary_offset, boundary_offset, window_width - boundary_offset, window_height - boundary_offset)
 
-    # Draw food
-    glColor3f(1.0, 0.0, 0.0)
-    draw_circle(food[0] + snake_size // 2, food[1] + snake_size // 2, snake_size // 2)
-    draw_magic_circles()
-    # Draw obstacles
-    draw_obstacles()
-    close_button()
-    magic_button()
-    pause_button()
+        # Draw snake
+        glColor3f(0.0, 1.0, 0.0)
+        for segment in snake:
+            draw_rect(segment[0], segment[1], snake_size, snake_size)
 
-    # Display score
-    glColor3f(1.0, 1.0, 1.0)
-    glRasterPos2f(10, window_height - 30)
-    for char in f"Score: {score}":
-        glutBitmapCharacter(GLUT_BITMAP_9_BY_15, ord(char))
+        # Draw food
+        glColor3f(1.0, 0.0, 0.0)
+        draw_circle(food[0] + snake_size // 2, food[1] + snake_size // 2, snake_size // 2)
+        draw_magic_circles()
+        # Draw obstacles
+        draw_obstacles()
+
+        # Display score
+        glColor3f(1.0, 1.0, 1.0)
+        glRasterPos2f(10, window_height - 30)
+        for char in f"Score: {score}":
+            glutBitmapCharacter(GLUT_BITMAP_9_BY_15, ord(char))
+
+        # Buttons
+        close_button()
+        magic_button()
+        reset_button()
+        if game_paused:
+            play_button()
+        else:
+            pause_button()
 
     glutSwapBuffers()
 
+def show_game_over():
+    glColor3f(1.0, 0.0, 0.0) 
+    glWindowPos2i(window_width // 2 - 50, window_height // 2)
+    game_over_text = "GAME OVER!!!!!"
+    for char in game_over_text:
+        glutBitmapCharacter(GLUT_BITMAP_9_BY_15, ord(char))
+    glWindowPos2i(window_width // 2 - 50, window_height // 2 - 20)
+    final_score_text = f"Final Score: {score}"
+    for char in final_score_text:
+        glutBitmapCharacter(GLUT_BITMAP_9_BY_15, ord(char))
+
 def respawn_food():
-    global food
+    global food, obstacles
+
     max_x = (window_width - 2 * boundary_offset - snake_size) // snake_size
     max_y = (window_height - 2 * boundary_offset - snake_size) // snake_size
-    food = [randint(0, max_x) * snake_size + boundary_offset, 
-            randint(0, max_y) * snake_size + boundary_offset]
-def update(value):
-    global snake, food, direction, score, magic_circles, animation_enabled, game_paused
+    
+    # Loop until the food is placed outside the obstacles
+    while True:
+        food = [randint(0, max_x) * snake_size + boundary_offset, 
+                randint(0, max_y) * snake_size + boundary_offset]
 
-    if not game_paused:
+        # Check for collision with any obstacle
+        collision = False
+        for obstacle in obstacles:
+            obs_x, obs_y = obstacle['pos']
+            obs_width, obs_height = obstacle['size']
+
+            if (food[0] < obs_x + obs_width and food[0] + snake_size > obs_x and
+                food[1] < obs_y + obs_height and food[1] + snake_size > obs_y):
+                collision = True
+                break  # Food collided with an obstacle, break the loop
+        
+        # If no collision occurred, break the loop
+        if not collision:
+            break
+
+def update(value):
+    global snake, food, direction, score, magic_circles, animation_enabled, game_paused, game_over
+
+    if not game_paused and not game_paused:
         # Move the snake with Wrap-around logic
         new_head = [snake[0][0] + direction[0], snake[0][1] + direction[1]]
-        if new_head[0] >= window_width - boundary_offset:
-            new_head[0] = boundary_offset
-        elif new_head[0] < boundary_offset:
-            new_head[0] = window_width - boundary_offset - snake_size
 
-        if new_head[1] >= window_height - boundary_offset:
-            new_head[1] = boundary_offset
-        elif new_head[1] < boundary_offset:
-            new_head[1] = window_height - boundary_offset - snake_size
+        # Check if the snake's head goes outside the boundary
+        if (new_head[0] >= window_width - boundary_offset or new_head[0] < boundary_offset or
+                new_head[1] >= window_height - boundary_offset or new_head[1] < boundary_offset):
+            game_over = True
+        else:
+            # Continue moving the snake within the boundary
+            snake.insert(0, new_head)
 
-        snake.insert(0, new_head)
-        snake.pop()
+            # Check for collision with itself
+            if check_collision_with_self():
+                game_over = True
+            elif check_collision_with_obstacles():
+                game_over = True
+            else:
+                snake.pop()
 
         # Check for collision with magic circles
         collided_circles = []
@@ -250,10 +351,16 @@ def update(value):
     glutPostRedisplay()
     glutTimerFunc(100, update, 0)
 
-
+def toggle_pause():
+    global game_paused
+    if game_paused:
+        game_paused = False
+    else:
+        game_paused = True
 
 def keyboard(key, x, y):
-    global direction
+    global direction, game_paused
+    
     if key == GLUT_KEY_LEFT and direction[0] != snake_speed:
         direction = [-snake_speed, 0]
     elif  key == GLUT_KEY_RIGHT and direction[0] != -snake_speed:
@@ -262,6 +369,8 @@ def keyboard(key, x, y):
         direction = [0, -snake_speed]
     elif key == GLUT_KEY_UP and direction[1] != -snake_speed:
         direction = [0, snake_speed]
+    elif key == b' ':
+        toggle_pause()
 
 glutInit(sys.argv)
 glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE)
