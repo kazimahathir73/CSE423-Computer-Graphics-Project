@@ -103,8 +103,6 @@ def check_collision_with_self():
 
     return False  # No collision with itself
 
-
-
 def restart_game():
     global snake, food, direction, score, magic_circles, game_paused
     snake = [[window_width // 2, window_height // 2]]
@@ -158,6 +156,7 @@ def convert_coordinate(x, y):
     a = x
     b = window_height- y
     return a, b
+
 def mouse_click(button, state, x, y):
     global point_frozen, animation_enabled, game_over, game_paused
 
